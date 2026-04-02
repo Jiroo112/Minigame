@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Neon Star Escape</title>
+    <style>
+        body { margin: 0; background: #050505; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        canvas { border: 4px solid #222; box-shadow: 0 0 30px rgba(255,255,255,0.05); }
+        .ui { position: absolute; top: 20px; text-align: center; width: 100%; pointer-events: none; z-index: 10; }
+        .score-board { font-size: 20px; color: #bbb; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .high-score { font-size: 32px; color: #ffcc00; font-weight: bold; margin-top: 5px; text-shadow: 0 0 15px rgba(255,204,0,0.6); }
+        .hint { position: absolute; bottom: 20px; color: #555; font-size: 13px; z-index: 10; }
+    </style>
+</head>
+<body>
+    <div class="ui">
+        <div class="score-board">SCORE: <span id="scoreVal">0</span></div>
+        <div class="high-score">RECORD: <span id="highScoreVal">0</span></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div class="hint">A/D atau Panah | <b>P untuk Pause</b></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('scoreVal');
+        const highScoreElement = document.getElementById('highScoreVal');
+
+        canvas.width = 400;
+        canvas.height = 550;
+
+        let score = 0;
+        let gameActive = true;
+        let isPaused = false;
+        let speed = 3.5;
+
+        let highScore = localStorage.getItem("highScore") || 0;
+        highScoreElement.innerText = highScore;
+
+        const player = { x: 190, y: 500, size: 20, color: '#00d2ff', speed: 4 };
+        const obstacles = [];
+        const keys = { ArrowLeft: false, ArrowRight: false, a: false, d: false };
+        const obstacleColors = ['#ff0055', '#00ff55', '#ff9900', '#9900ff', '#ffff00', '#ff3333'];
+
+        // --- SISTEM PARTIKEL BINTANG ---
+        const stars = [];
+        const numStars = 100; // Jumlah bintang
+
+        function createStars() {
+            for (let i = 0; i < numStars; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2, // Ukuran acak (0-2px)
+                    speed: Math.random() * 0.5 + 0.1, // Kecepatan jatuh acak
+                    opacity: Math.random() * 0.8 + 0.2 // Transparansi acak
+                });
+            }
+        }
+
+        function updateStars() {
+            for (let star of stars) {
+                star.y += star.speed;
+                // Jika bintang keluar bawah, munculkan lagi di atas
+                if (star.y > canvas.height) {
+                    star.y = -5;
+                    star.x = Math.random() * canvas.width;
+                }
+            }
+        }
+
+        function drawStars() {
+            ctx.fillStyle = "white";
+            for (let star of stars) {
+                ctx.globalAlpha = star.opacity; // Terapkan transparansi
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0; // Reset transparansi
+        }
+
+        // --- SISTEM GAME LAINNYA ---
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'p') isPaused = !isPaused;
+            if (e.key in keys) keys[e.key] = true;
+            if (['a','d'].includes(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key in keys) keys[e.key] = false;
+            if (['a','d'].includes(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false;
+        });
+
+        function createObstacle() {
+            const size = Math.random() * (45 - 20) + 20;
+            const randomColor = obstacleColors[Math.floor(Math.random() * obstacleColors.length)];
+            obstacles.push({
+                x: Math.random() * (canvas.width - size),
+                y: -size,
+                size: size,
+                color: randomColor
+            });
+        }
+
+        function update() {
+            if (!gameActive || isPaused) return;
+
+            updateStars(); // Update posisi bintang
+
+            if (keys.ArrowLeft || keys.a) player.x -= player.speed;
+            if (keys.ArrowRight || keys.d) player.x += player.speed;
+
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.size > canvas.width) player.x = canvas.width - player.size;
+
+            score++;
+            let currentScore = Math.floor(score / 10);
+            scoreElement.innerText = currentScore;
+            
+            if (score % 600 === 0) speed += 0.3;
+            if (Math.random() < 0.04) createObstacle();
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].y += speed;
+
+                if (
+                    player.x < obstacles[i].x + obstacles[i].size &&
+                    player.x + player.size > obstacles[i].x &&
+                    player.y < obstacles[i].y + obstacles[i].size &&
+                    player.y + player.size > obstacles[i].y
+                ) {
+                    gameActive = false;
+                    handleGameOver(currentScore);
+                }
+                if (obstacles[i].y > canvas.height) obstacles.splice(i, 1);
+            }
+        }
+
+        function handleGameOver(finalScore) {
+            if (finalScore > highScore) {
+                localStorage.setItem("highScore", finalScore);
+                alert("REKOR BARU! 🎉: " + finalScore);
+            } else {
+                alert("GAME OVER! Skor Kamu: " + finalScore);
+            }
+            document.location.reload();
+        }
+
+        function draw() {
+            // 1. Gambar Gradasi Latar Belakang (Variasi Warna)
+            let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, "#000a1a"); // Biru Tua sangat gelap di atas
+            gradient.addColorStop(1, "#000000"); // Hitam pekat di bawah
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Gambar Bintang
+            drawStars();
+
+            // 3. Gambar Player (Neon Glow)
+            ctx.fillStyle = player.color;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = player.color;
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+
+            // 4. Gambar Obstacles (Neon Glow)
+            for (const obs of obstacles) {
+                ctx.fillStyle = obs.color;
+                ctx.shadowBlur = 10; 
+                ctx.shadowColor = obs.color; 
+                ctx.fillRect(obs.x, obs.y, obs.size, obs.size);
+            }
+            ctx.shadowBlur = 0; // Reset glow
+
+            if (isPaused) {
+                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillRect(0,0, canvas.width, canvas.height);
+                ctx.fillStyle = "white";
+                ctx.font = "bold 30px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("PAUSED", canvas.width/2, canvas.height/2);
+                ctx.textAlign = "start"; // Reset text align
+            }
+
+            update();
+            requestAnimationFrame(draw);
+        }
+
+        createStars(); // Buat bintang saat pertama kali load
+        draw();
+    </script>
+</body>
+</html>
